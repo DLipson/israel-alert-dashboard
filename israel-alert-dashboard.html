@@ -1233,9 +1233,10 @@
             if (currentAlertId && currentAlertId !== mostRecentAlertId && mostRecentAlertId !== null) {
                 // Get the category of the most recent alert
                 const mostRecentAlert = filteredAlerts[0];
-                // Only play sound if this is genuinely a new alert (newer alertDate)
+                // Only play sound if this is genuinely a new alert (newer alertDate) and less than 10 minutes old
                 const newAlertDate = parseAlertDate(mostRecentAlert);
-                if (newAlertDate > mostRecentAlertDate) {
+                const tenMinutesAgo = Date.now() - (10 * 60 * 1000);
+                if (newAlertDate > mostRecentAlertDate && newAlertDate >= tenMinutesAgo) {
                     playAlertSound(mostRecentAlert?.category);
                 }
             }

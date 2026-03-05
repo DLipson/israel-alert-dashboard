@@ -9,3 +9,6 @@ enabled = true
 directory = "."
 binding = "ASSETS"
 run_worker_first = true
+
+[nodejs_compat]
+enabled = true

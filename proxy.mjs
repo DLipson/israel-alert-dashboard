@@ -82,18 +82,19 @@ export default {
     }
 
     const handler = ROUTES[pathname];
-    if (!handler) {
-      return new Response("Not found", { status: 404 });
+    if (handler) {
+      try {
+        const body = await handler();
+        return new Response(typeof body === "string" ? body : JSON.stringify(body), {
+          status: 200,
+          headers: CORS_HEADERS,
+        });
+      } catch (err) {
+        return new Response(`Upstream error: ${err.message}`, { status: 502 });
+      }
     }
 
-    try {
-      const body = await handler();
-      return new Response(typeof body === "string" ? body : JSON.stringify(body), {
-        status: 200,
-        headers: CORS_HEADERS,
-      });
-    } catch (err) {
-      return new Response(`Upstream error: ${err.message}`, { status: 502 });
-    }
+    // Serve static assets (HTML, etc.)
+    return env.ASSETS.fetch(request);
   },
 };

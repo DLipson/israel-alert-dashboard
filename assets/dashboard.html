@@ -342,12 +342,19 @@
             gap: 32px;
             font-size: var(--font-size-sm);
             white-space: nowrap;
-            animation: scroll-left 40s linear infinite;
+            animation: scroll-left 60s linear infinite;
+            /* Slowed down from 40s to 60s */
         }
 
         @keyframes scroll-left {
+            from {
+                transform: translateX(100%);
+                /* Start from the right */
+            }
+
             to {
-                transform: translateX(-50%);
+                transform: translateX(-100%);
+                /* Loop back to the left */
             }
         }
 

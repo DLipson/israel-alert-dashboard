@@ -588,6 +588,36 @@
             text-transform: uppercase;
             letter-spacing: 0.1em;
         }
+
+        .remove-sound-btn {
+            margin-left: 8px;
+            padding: 4px 8px;
+            background: var(--red);
+            color: #fff;
+            border: none;
+            border-radius: 2px;
+            cursor: pointer;
+            font-family: var(--mono);
+            font-size: var(--font-size-sm);
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+
+        .remove-sound-btn:hover {
+            background: #cc0000;
+        }
+
+        .remove-sound-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        .sound-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 6px;
+        }
     </style>
 </head>
 
@@ -667,39 +697,65 @@
                 <div class="setting-group">
                     <label class="setting-label">Custom Alert Sounds</label>
                     <small style="color: var(--dim); font-size: 9px; display: block; margin-bottom: 8px;">Upload MP3
-                        files for different alert types (optional, overrides tone)</small>
+                        files for different alert types (optional)</small>
+
+                    <div class="setting-checkbox" style="margin-bottom: 12px;">
+                        <input type="checkbox" id="settings-use-custom-sounds" checked>
+                        <label for="settings-use-custom-sounds">Use Custom Sounds (when uploaded)</label>
+                    </div>
 
                     <div class="sound-card">
                         <div class="sound-card-title">🔴 Active Alert</div>
+                        <div class="setting-checkbox" style="margin-bottom: 8px;">
+                            <input type="checkbox" id="settings-use-custom-active" checked>
+                            <label for="settings-use-custom-active">Use custom sound for this alert type</label>
+                        </div>
                         <div class="file-input-wrapper">
                             <label class="file-input-label" for="sound-active-upload">Choose MP3</label>
                             <input type="file" id="sound-active-upload" accept=".mp3,audio/mpeg" />
                         </div>
                         <div class="file-name" id="sound-active-name"></div>
-                        <button id="sound-active-test"
-                            style="margin-top: 6px; padding: 4px 8px; background: var(--accent); color: #000; border: none; border-radius: 2px; cursor: pointer; font-family: var(--mono); font-size: var(--font-size-sm); font-weight: bold;">Test</button>
+                        <div class="sound-controls">
+                            <button id="sound-active-test"
+                                style="padding: 4px 8px; background: var(--accent); color: #000; border: none; border-radius: 2px; cursor: pointer; font-family: var(--mono); font-size: var(--font-size-sm); font-weight: bold;">Test</button>
+                            <button id="sound-active-remove" class="remove-sound-btn" disabled>Remove</button>
+                        </div>
                     </div>
 
                     <div class="sound-card">
                         <div class="sound-card-title">🟢 Resolved Alert</div>
+                        <div class="setting-checkbox" style="margin-bottom: 8px;">
+                            <input type="checkbox" id="settings-use-custom-resolved" checked>
+                            <label for="settings-use-custom-resolved">Use custom sound for this alert type</label>
+                        </div>
                         <div class="file-input-wrapper">
                             <label class="file-input-label" for="sound-resolved-upload">Choose MP3</label>
                             <input type="file" id="sound-resolved-upload" accept=".mp3,audio/mpeg" />
                         </div>
                         <div class="file-name" id="sound-resolved-name"></div>
-                        <button id="sound-resolved-test"
-                            style="margin-top: 6px; padding: 4px 8px; background: var(--accent); color: #000; border: none; border-radius: 2px; cursor: pointer; font-family: var(--mono); font-size: var(--font-size-sm); font-weight: bold;">Test</button>
+                        <div class="sound-controls">
+                            <button id="sound-resolved-test"
+                                style="padding: 4px 8px; background: var(--accent); color: #000; border: none; border-radius: 2px; cursor: pointer; font-family: var(--mono); font-size: var(--font-size-sm); font-weight: bold;">Test</button>
+                            <button id="sound-resolved-remove" class="remove-sound-btn" disabled>Remove</button>
+                        </div>
                     </div>
 
                     <div class="sound-card">
                         <div class="sound-card-title">🟠 Expected Alert</div>
+                        <div class="setting-checkbox" style="margin-bottom: 8px;">
+                            <input type="checkbox" id="settings-use-custom-expected" checked>
+                            <label for="settings-use-custom-expected">Use custom sound for this alert type</label>
+                        </div>
                         <div class="file-input-wrapper">
                             <label class="file-input-label" for="sound-expected-upload">Choose MP3</label>
                             <input type="file" id="sound-expected-upload" accept=".mp3,audio/mpeg" />
                         </div>
                         <div class="file-name" id="sound-expected-name"></div>
-                        <button id="sound-expected-test"
-                            style="margin-top: 6px; padding: 4px 8px; background: var(--accent); color: #000; border: none; border-radius: 2px; cursor: pointer; font-family: var(--mono); font-size: var(--font-size-sm); font-weight: bold;">Test</button>
+                        <div class="sound-controls">
+                            <button id="sound-expected-test"
+                                style="padding: 4px 8px; background: var(--accent); color: #000; border: none; border-radius: 2px; cursor: pointer; font-family: var(--mono); font-size: var(--font-size-sm); font-weight: bold;">Test</button>
+                            <button id="sound-expected-remove" class="remove-sound-btn" disabled>Remove</button>
+                        </div>
                     </div>
                 </div>
 
@@ -795,6 +851,10 @@
                     resolved: null,
                     expected: null
                 },
+                useCustomSounds: true,
+                useCustomSoundActive: true,
+                useCustomSoundResolved: true,
+                useCustomSoundExpected: true,
                 notificationsEnabled: false
             },
             timing: {
@@ -833,12 +893,14 @@
 
             // Determine which sound to play
             let soundUrl = null;
-            if (category === ALERT_CATEGORY.ACTIVE && settings.soundUrls?.active) {
-                soundUrl = settings.soundUrls.active;
-            } else if (category === ALERT_CATEGORY.RESOLVED && settings.soundUrls?.resolved) {
-                soundUrl = settings.soundUrls.resolved;
-            } else if (category === ALERT_CATEGORY.EXPECTED && settings.soundUrls?.expected) {
-                soundUrl = settings.soundUrls.expected;
+            if (settings.useCustomSounds) {
+                if (category === ALERT_CATEGORY.ACTIVE && settings.useCustomSoundActive && settings.soundUrls?.active) {
+                    soundUrl = settings.soundUrls.active;
+                } else if (category === ALERT_CATEGORY.RESOLVED && settings.useCustomSoundResolved && settings.soundUrls?.resolved) {
+                    soundUrl = settings.soundUrls.resolved;
+                } else if (category === ALERT_CATEGORY.EXPECTED && settings.useCustomSoundExpected && settings.soundUrls?.expected) {
+                    soundUrl = settings.soundUrls.expected;
+                }
             }
 
             if (soundUrl) {
@@ -981,18 +1043,32 @@
         }
 
         function updateSoundFileNames() {
-            const displayFileName = (fileName, elementId) => {
+            const displayFileName = (fileName, elementId, removeButtonId) => {
                 const el = document.getElementById(elementId);
+                const removeBtn = document.getElementById(removeButtonId);
                 if (!fileName) {
                     el.textContent = '';
+                    if (removeBtn) removeBtn.disabled = true;
                     return;
                 }
                 el.textContent = '✓ ' + fileName;
                 el.style.color = 'var(--green)';
+                if (removeBtn) removeBtn.disabled = false;
             };
-            displayFileName(settings.soundFileNames?.active, 'sound-active-name');
-            displayFileName(settings.soundFileNames?.resolved, 'sound-resolved-name');
-            displayFileName(settings.soundFileNames?.expected, 'sound-expected-name');
+            displayFileName(settings.soundFileNames?.active, 'sound-active-name', 'sound-active-remove');
+            displayFileName(settings.soundFileNames?.resolved, 'sound-resolved-name', 'sound-resolved-remove');
+            displayFileName(settings.soundFileNames?.expected, 'sound-expected-name', 'sound-expected-remove');
+        }
+
+        function removeSound(soundType) {
+            settings.soundUrls[soundType] = null;
+            settings.soundFileNames[soundType] = null;
+            saveSettings();
+            updateSoundFileNames();
+
+            // Clear the file input
+            const inputId = `sound-${soundType}-upload`;
+            document.getElementById(inputId).value = '';
         }
 
         function applySettings() {
@@ -1007,6 +1083,10 @@
             document.getElementById('settings-volume').value = settings.volume;
             document.getElementById('volume-value').textContent = settings.volume;
             document.getElementById('settings-notifications-enabled').checked = settings.notificationsEnabled;
+            document.getElementById('settings-use-custom-sounds').checked = settings.useCustomSounds;
+            document.getElementById('settings-use-custom-active').checked = settings.useCustomSoundActive;
+            document.getElementById('settings-use-custom-resolved').checked = settings.useCustomSoundResolved;
+            document.getElementById('settings-use-custom-expected').checked = settings.useCustomSoundExpected;
         }
 
         // ── Modal Controls ────────────────────────────────────────────────────────
@@ -1071,6 +1151,26 @@
             saveSettings();
         });
 
+        document.getElementById('settings-use-custom-sounds').addEventListener('change', (e) => {
+            settings.useCustomSounds = e.target.checked;
+            saveSettings();
+        });
+
+        document.getElementById('settings-use-custom-active').addEventListener('change', (e) => {
+            settings.useCustomSoundActive = e.target.checked;
+            saveSettings();
+        });
+
+        document.getElementById('settings-use-custom-resolved').addEventListener('change', (e) => {
+            settings.useCustomSoundResolved = e.target.checked;
+            saveSettings();
+        });
+
+        document.getElementById('settings-use-custom-expected').addEventListener('change', (e) => {
+            settings.useCustomSoundExpected = e.target.checked;
+            saveSettings();
+        });
+
         // File upload handlers
         const handleFileUpload = (inputId, settingsKey, nameElementId) => {
             document.getElementById(inputId).addEventListener('change', (e) => {
@@ -1091,6 +1191,11 @@
         handleFileUpload('sound-active-upload', 'active', 'sound-active-name');
         handleFileUpload('sound-resolved-upload', 'resolved', 'sound-resolved-name');
         handleFileUpload('sound-expected-upload', 'expected', 'sound-expected-name');
+
+        // Remove button handlers
+        document.getElementById('sound-active-remove').addEventListener('click', () => removeSound('active'));
+        document.getElementById('sound-resolved-remove').addEventListener('click', () => removeSound('resolved'));
+        document.getElementById('sound-expected-remove').addEventListener('click', () => removeSound('expected'));
 
         // Test buttons for custom sounds
         document.getElementById('sound-active-test').addEventListener('click', () => {

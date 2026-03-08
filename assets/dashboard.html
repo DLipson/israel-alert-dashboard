@@ -504,6 +504,7 @@
             background: var(--border);
             outline: none;
             -webkit-appearance: none;
+            appearance: none;
         }
 
         .setting-slider input[type="range"]::-webkit-slider-thumb {
@@ -591,16 +592,21 @@
 
         .remove-sound-btn {
             margin-left: 8px;
-            padding: 4px 8px;
+            padding: 4px;
             background: var(--red);
             color: #fff;
             border: none;
-            border-radius: 2px;
+            border-radius: 50%;
             cursor: pointer;
             font-family: var(--mono);
             font-size: var(--font-size-sm);
             font-weight: bold;
             transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 24px;
+            height: 24px;
         }
 
         .remove-sound-btn:hover {
@@ -615,8 +621,7 @@
         .sound-controls {
             display: flex;
             align-items: center;
-            gap: 8px;
-            margin-top: 6px;
+            gap: 12px;
         }
     </style>
 </head>
@@ -718,7 +723,8 @@
                         <div class="sound-controls">
                             <button id="sound-active-test"
                                 style="padding: 4px 8px; background: var(--accent); color: #000; border: none; border-radius: 2px; cursor: pointer; font-family: var(--mono); font-size: var(--font-size-sm); font-weight: bold;">Test</button>
-                            <button id="sound-active-remove" class="remove-sound-btn" disabled>Remove</button>
+                            <button id="sound-active-remove" class="remove-sound-btn" disabled
+                                title="Remove sound">🗑️</button>
                         </div>
                     </div>
 
@@ -736,7 +742,8 @@
                         <div class="sound-controls">
                             <button id="sound-resolved-test"
                                 style="padding: 4px 8px; background: var(--accent); color: #000; border: none; border-radius: 2px; cursor: pointer; font-family: var(--mono); font-size: var(--font-size-sm); font-weight: bold;">Test</button>
-                            <button id="sound-resolved-remove" class="remove-sound-btn" disabled>Remove</button>
+                            <button id="sound-resolved-remove" class="remove-sound-btn" disabled
+                                title="Remove sound">🗑️</button>
                         </div>
                     </div>
 
@@ -754,7 +761,8 @@
                         <div class="sound-controls">
                             <button id="sound-expected-test"
                                 style="padding: 4px 8px; background: var(--accent); color: #000; border: none; border-radius: 2px; cursor: pointer; font-family: var(--mono); font-size: var(--font-size-sm); font-weight: bold;">Test</button>
-                            <button id="sound-expected-remove" class="remove-sound-btn" disabled>Remove</button>
+                            <button id="sound-expected-remove" class="remove-sound-btn" disabled
+                                title="Remove sound">🗑️</button>
                         </div>
                     </div>
                 </div>

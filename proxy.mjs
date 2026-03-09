@@ -40,12 +40,17 @@ function deduplicationKey(alert) {
 
 function deduplicateAlerts(alerts) {
   const seen = new Set();
-  return alerts.filter((a) => {
+  const result = [];
+
+  for (const a of alerts) {
     const key = deduplicationKey(a);
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+    if (!seen.has(key)) {
+      seen.add(key);
+      result.push(a);
+    }
+  }
+
+  return result;
 }
 
 async function fetchMergedAlerts() {
@@ -54,11 +59,17 @@ async function fetchMergedAlerts() {
     fetchJson("https://alerts-history.oref.org.il/Shared/Ajax/GetAlarmsHistory.aspx", OREF_HEADERS),
   ]);
 
-  const fromPrimary =
-    primary.status === "fulfilled" && Array.isArray(primary.value) ? primary.value.map(normalizeAlert) : [];
-  const fromHistory =
-    history.status === "fulfilled" && Array.isArray(history.value) ? history.value.map(normalizeAlert) : [];
+  const MAX_ALERTS = 100;
 
+  const fromPrimary =
+    primary.status === "fulfilled" && Array.isArray(primary.value)
+      ? primary.value.slice(0, MAX_ALERTS).map(normalizeAlert)
+      : [];
+
+  const fromHistory =
+    history.status === "fulfilled" && Array.isArray(history.value)
+      ? history.value.slice(0, MAX_ALERTS).map(normalizeAlert)
+      : [];
   if (!fromPrimary.length && !fromHistory.length) {
     throw new Error("Both oref sources failed");
   }

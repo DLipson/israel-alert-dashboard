@@ -1132,7 +1132,8 @@
             saveSettings();
             // Reset mostRecentAlertId to prevent false sound trigger from filter change
             mostRecentAlertId = null;
-            applyAlertsFilter();
+            // Trigger new fetch with updated filter
+            poll();
         });
 
         document.getElementById('settings-font-size').addEventListener('input', (e) => {
@@ -1272,9 +1273,19 @@
             return response.json();
         }
 
+        // Update `fetchAndRender` to include `city` parameter if locationFilter is set
         async function fetchAndRender(url, renderFn, ids) {
             const errorEl = document.getElementById(ids.error);
             const updatedEl = document.getElementById(ids.updated);
+
+            // Add `city` parameter if locationFilter is set
+            const city = settings.locationFilter?.trim();
+            if (city) {
+                const urlObj = new URL(url, window.location.origin);
+                urlObj.searchParams.set("city", city);
+                url = urlObj.toString();
+            }
+
             try {
                 const data = await fetchJson(url);
                 errorEl.hidden = true;
@@ -1343,16 +1354,12 @@
         function renderAlerts(data) {
             lastAlerts = Array.isArray(data) ? data : [];
 
-            const filteredAlerts = settings.locationFilter && settings.locationFilter.trim()
-                ? lastAlerts.filter(a => a.data?.includes(settings.locationFilter))
-                : lastAlerts;
-
-            const currentAlertId = getMostRecentAlertId(filteredAlerts);
+            const currentAlertId = getMostRecentAlertId(lastAlerts);
             const hasUpdates = currentAlertId !== mostRecentAlertId;
 
             if (currentAlertId && currentAlertId !== mostRecentAlertId && mostRecentAlertId !== null) {
                 // Get the category of the most recent alert
-                const mostRecentAlert = filteredAlerts[0];
+                const mostRecentAlert = lastAlerts[0];
                 // Only play sound if this is genuinely a new alert (newer alertDate) and less than 10 minutes old
                 const newAlertDate = parseAlertDate(mostRecentAlert);
                 const tenMinutesAgo = Date.now() - (10 * 60 * 1000);
@@ -1363,10 +1370,10 @@
 
             if (hasUpdates) {
                 mostRecentAlertId = currentAlertId;
-                if (filteredAlerts.length > 0) {
-                    mostRecentAlertDate = parseAlertDate(filteredAlerts[0]);
+                if (lastAlerts.length > 0) {
+                    mostRecentAlertDate = parseAlertDate(lastAlerts[0]);
                 }
-                applyAlertsFilter();
+                renderAlertsUI(lastAlerts);
                 updateTicker(lastAlerts);
             }
         }
@@ -1375,16 +1382,10 @@
             return new Date(alert.alertDate.replace(' ', 'T')).getTime();
         }
 
-        function applyAlertsFilter() {
-            const alerts = settings.locationFilter && settings.locationFilter.trim()
-                ? lastAlerts.filter(a => a.data?.includes(settings.locationFilter))
-                : lastAlerts;
-
-            const sorted = [...alerts].sort((a, b) => parseAlertDate(b) - parseAlertDate(a));
-
+        function renderAlertsUI(alerts) {
             document.getElementById('oref-list').innerHTML =
-                sorted.length
-                    ? sorted.map(alertCard).join('')
+                alerts.length
+                    ? alerts.map(alertCard).join('')
                     : '<div class="empty-state">No alerts</div>';
         }
 

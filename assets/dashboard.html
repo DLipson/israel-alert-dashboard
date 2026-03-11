@@ -630,6 +630,59 @@
             align-items: center;
             gap: 12px;
         }
+
+        .developer-panel {
+            border: 1px solid var(--border);
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 2px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .developer-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .developer-label {
+            font-size: var(--font-size-xs);
+            letter-spacing: 0.1em;
+            color: #9aa0b0;
+            text-transform: uppercase;
+            min-width: 120px;
+        }
+
+        .developer-btn {
+            padding: 4px 10px;
+            border-radius: 2px;
+            border: 1px solid var(--border);
+            background: transparent;
+            color: var(--text);
+            font-family: var(--mono);
+            font-size: var(--font-size-sm);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .developer-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .developer-note {
+            font-size: var(--font-size-xs);
+            color: var(--dim);
+            line-height: 1.4;
+        }
+
+        .developer-status {
+            font-size: var(--font-size-xs);
+            color: var(--accent);
+        }
     </style>
 </head>
 
@@ -803,6 +856,35 @@
                         <label for="settings-notifications-enabled">Enable Desktop Notifications</label>
                     </div>
                 </div>
+
+                <div class="setting-group">
+                    <label class="setting-label">Developer Tools</label>
+                    <div class="developer-panel">
+                        <div class="setting-checkbox">
+                            <input type="checkbox" id="settings-feed-filter-enabled" checked>
+                            <label for="settings-feed-filter-enabled">Enable Emess category filter</label>
+                        </div>
+                        <div class="developer-note">Filter category: <span id="dev-feed-category"></span></div>
+
+                        <div class="developer-row">
+                            <span class="developer-label">Oref Endpoint</span>
+                            <select id="settings-oref-endpoint" class="setting-select">
+                                <option value="merged_city" selected>Worker /oref (merged) — city</option>
+                                <option value="merged_all">Worker /oref (merged) — all</option>
+                                <option value="primary_all">Worker /oref-primary — AlertsHistory.json</option>
+                                <option value="history_city">Worker /oref-history — city</option>
+                                <option value="history_all">Worker /oref-history — all</option>
+                            </select>
+                        </div>
+
+                        <div class="developer-row">
+                            <button id="dev-oref-test" class="developer-btn">Test Oref Request</button>
+                            <span class="developer-status" id="dev-oref-status"></span>
+                        </div>
+                        <div class="developer-note" id="dev-oref-url"></div>
+                        <div class="developer-note">Uses the current Location Filter value for city-enabled endpoints.</div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -820,6 +902,15 @@
             api: {
                 orefUrl: '/oref',
                 emessUrl: '/emess'
+            },
+            dev: {
+                orefEndpoints: {
+                    merged_city: { label: 'Worker /oref (merged) — city', url: '/oref', supportsCity: true },
+                    merged_all: { label: 'Worker /oref (merged) — all', url: '/oref', supportsCity: false },
+                    primary_all: { label: 'Worker /oref-primary — AlertsHistory.json', url: '/oref-primary', supportsCity: false },
+                    history_city: { label: 'Worker /oref-history — city', url: '/oref-history', supportsCity: true },
+                    history_all: { label: 'Worker /oref-history — all', url: '/oref-history', supportsCity: false }
+                }
             },
             categories: {
                 alert: { ACTIVE: 1, RESOLVED: 13, EXPECTED: 14 },
@@ -848,11 +939,13 @@
                 },
                 tickerAlertCount: 20
             },
-            defaults: {
-                locationFilter: 'בית שמש',
-                feedCategory: 'אונליין',
-                pollInterval: 10000,
-                fontSizePercent: 100,
+                defaults: {
+                    locationFilter: 'בית שמש',
+                    feedCategory: 'אונליין',
+                    feedFilterEnabled: true,
+                    orefEndpoint: 'merged_city',
+                    pollInterval: 10000,
+                    fontSizePercent: 100,
                 soundEnabled: true,
                 soundType: 'sine',
                 volume: 30,
@@ -888,6 +981,7 @@
         let audioContext = null;
         let currentPlayingAudios = {}; // Track playing audio by button ID
         let testSoundPlaying = false; // Track if fallback test is playing
+        let lastFeedData = null;
 
         // Settings state
         let settings = {};
@@ -1042,6 +1136,34 @@
             return new Date().toLocaleTimeString('he-IL', { hour12: false });
         }
 
+        function getOrefEndpointConfig() {
+            return CONFIG.dev.orefEndpoints[settings.orefEndpoint] ?? CONFIG.dev.orefEndpoints.merged_city;
+        }
+
+        function buildOrefRequestUrl() {
+            const endpoint = getOrefEndpointConfig();
+            const urlObj = new URL(endpoint.url, window.location.origin);
+            let warning = '';
+
+            if (endpoint.supportsCity) {
+                const city = settings.locationFilter?.trim();
+                if (city) {
+                    urlObj.searchParams.set('city', city);
+                } else {
+                    warning = 'Location filter is empty; city param not applied.';
+                }
+            }
+
+            return { url: urlObj.toString(), label: endpoint.label, warning };
+        }
+
+        function updateDevOrefPreview() {
+            const previewEl = document.getElementById('dev-oref-url');
+            if (!previewEl) return;
+            const { url, label, warning } = buildOrefRequestUrl();
+            previewEl.textContent = `${label} → ${url}${warning ? ' — ' + warning : ''}`;
+        }
+
 
         // ── Settings Management ───────────────────────────────────────────────────
 
@@ -1049,6 +1171,9 @@
             const saved = localStorage.getItem('alertDashboardSettings');
             const loaded = saved ? JSON.parse(saved) : {};
             settings = { ...CONFIG.defaults, ...loaded };
+            if (!CONFIG.dev.orefEndpoints[settings.orefEndpoint]) {
+                settings.orefEndpoint = CONFIG.defaults.orefEndpoint;
+            }
             updateSoundFileNames();
             applySettings();
         }
@@ -1102,6 +1227,30 @@
             document.getElementById('settings-use-custom-active').checked = settings.useCustomSoundActive;
             document.getElementById('settings-use-custom-resolved').checked = settings.useCustomSoundResolved;
             document.getElementById('settings-use-custom-expected').checked = settings.useCustomSoundExpected;
+            document.getElementById('settings-feed-filter-enabled').checked = settings.feedFilterEnabled;
+            document.getElementById('settings-oref-endpoint').value = settings.orefEndpoint;
+            document.getElementById('dev-feed-category').textContent = settings.feedCategory;
+            updateDevOrefPreview();
+        }
+
+        async function runOrefTest() {
+            const statusEl = document.getElementById('dev-oref-status');
+            if (statusEl) statusEl.textContent = 'Testing...';
+
+            const { url, warning } = buildOrefRequestUrl();
+            const result = await fetchAndRender(url, renderAlerts, { error: 'oref-error', updated: 'oref-updated' });
+            const count = Array.isArray(result?.data) ? result.data.length : 0;
+
+            if (!statusEl) return;
+            if (result?.ok) {
+                statusEl.textContent = `OK • ${count} alerts • ${currentTime()}`;
+            } else {
+                statusEl.textContent = `Failed • ${currentTime()}`;
+            }
+
+            if (warning) {
+                statusEl.textContent += ` • ${warning}`;
+            }
         }
 
         // ── Modal Controls ────────────────────────────────────────────────────────
@@ -1134,6 +1283,7 @@
             mostRecentAlertId = null;
             // Trigger new fetch with updated filter
             poll();
+            updateDevOrefPreview();
         });
 
         document.getElementById('settings-font-size').addEventListener('input', (e) => {
@@ -1146,6 +1296,23 @@
         document.getElementById('settings-sound-enabled').addEventListener('change', (e) => {
             settings.soundEnabled = e.target.checked;
             saveSettings();
+        });
+
+        document.getElementById('settings-feed-filter-enabled').addEventListener('change', (e) => {
+            settings.feedFilterEnabled = e.target.checked;
+            saveSettings();
+            mostRecentFeedId = null;
+            if (lastFeedData) {
+                renderFeed(lastFeedData);
+            }
+        });
+
+        document.getElementById('settings-oref-endpoint').addEventListener('change', (e) => {
+            settings.orefEndpoint = e.target.value;
+            saveSettings();
+            updateDevOrefPreview();
+            mostRecentAlertId = null;
+            startPolling();
         });
 
         document.getElementById('settings-sound-type').addEventListener('change', (e) => {
@@ -1258,6 +1425,10 @@
             }
         });
 
+        document.getElementById('dev-oref-test').addEventListener('click', () => {
+            runOrefTest();
+        });
+
         // ── Clock ─────────────────────────────────────────────────────────────────
 
         setInterval(() => {
@@ -1273,29 +1444,20 @@
             return response.json();
         }
 
-        // Update `fetchAndRender` to include `city` parameter if locationFilter is set
         async function fetchAndRender(url, renderFn, ids) {
             const errorEl = document.getElementById(ids.error);
             const updatedEl = document.getElementById(ids.updated);
-
-            // Add `city` parameter if locationFilter is set
-            const city = settings.locationFilter?.trim();
-            if (city) {
-                const urlObj = new URL(url, window.location.origin);
-                urlObj.searchParams.set("city", city);
-                url = urlObj.toString();
-            }
 
             try {
                 const data = await fetchJson(url);
                 errorEl.hidden = true;
                 updatedEl.textContent = `Updated ${currentTime()}`;
                 renderFn(data);
-                return true;
+                return { ok: true, data };
             } catch (err) {
                 errorEl.textContent = err.message;
                 errorEl.hidden = false;
-                return false;
+                return { ok: false, error: err };
             }
         }
 
@@ -1420,10 +1582,13 @@
         }
 
         function renderFeed(data) {
+            lastFeedData = data ?? null;
             const items = data?.feed ?? [];
             const categories = data?.feeds ?? [];
             const categoryById = Object.fromEntries(categories.map(c => [c.id, c.name]));
-            const filteredItems = items.filter(item => categoryById[item.feed] === CONFIG.defaults.feedCategory);
+            const filteredItems = settings.feedFilterEnabled
+                ? items.filter(item => categoryById[item.feed] === settings.feedCategory)
+                : items;
 
             const currentFeedId = getMostRecentFeedId(filteredItems);
             const hasUpdates = currentFeedId !== mostRecentFeedId;
@@ -1454,11 +1619,14 @@
         let pollTimer = null;
 
         async function poll() {
-            const [orefOk, emessOk] = await Promise.all([
-                fetchAndRender(CONFIG.api.orefUrl, renderAlerts, { error: 'oref-error', updated: 'oref-updated' }),
+            const { url } = buildOrefRequestUrl();
+            const [orefResult, emessResult] = await Promise.all([
+                fetchAndRender(url, renderAlerts, { error: 'oref-error', updated: 'oref-updated' }),
                 fetchAndRender(CONFIG.api.emessUrl, renderFeed, { error: 'emess-error', updated: 'emess-updated' }),
             ]);
 
+            const orefOk = orefResult?.ok;
+            const emessOk = emessResult?.ok;
             document.getElementById('live-dot').className = 'live-dot' + (orefOk || emessOk ? '' : ' error');
         }
 

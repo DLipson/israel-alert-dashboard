@@ -6,6 +6,11 @@ const OREF_HEADERS = {
   "X-Requested-With": "XMLHttpRequest",
 };
 
+const OREF_ENDPOINTS = {
+  primary: "https://www.oref.org.il/warningMessages/alert/History/AlertsHistory.json",
+  history: "https://alerts-history.oref.org.il/Shared/Ajax/GetAlarmsHistory.aspx",
+};
+
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Content-Type": "application/json",
@@ -53,22 +58,36 @@ function deduplicateAlerts(alerts) {
   return result;
 }
 
+const MAX_ALERTS = 100;
+
+function normalizeAlerts(raw) {
+  return Array.isArray(raw) ? raw.map(normalizeAlert) : [];
+}
+
+async function fetchPrimaryAlerts() {
+  const data = await fetchJson(OREF_ENDPOINTS.primary, OREF_HEADERS);
+  return normalizeAlerts(data).slice(0, MAX_ALERTS);
+}
+
+async function fetchHistoryAlerts() {
+  const data = await fetchJson(OREF_ENDPOINTS.history, OREF_HEADERS);
+  return normalizeAlerts(data).slice(0, MAX_ALERTS);
+}
+
 async function fetchMergedAlerts() {
   const [primary, history] = await Promise.allSettled([
-    fetchJson("https://www.oref.org.il/warningMessages/alert/History/AlertsHistory.json", OREF_HEADERS),
-    fetchJson("https://alerts-history.oref.org.il/Shared/Ajax/GetAlarmsHistory.aspx", OREF_HEADERS),
+    fetchPrimaryAlerts(),
+    fetchHistoryAlerts(),
   ]);
-
-  const MAX_ALERTS = 100;
 
   const fromPrimary =
     primary.status === "fulfilled" && Array.isArray(primary.value)
-      ? primary.value.slice(0, MAX_ALERTS).map(normalizeAlert)
+      ? primary.value
       : [];
 
   const fromHistory =
     history.status === "fulfilled" && Array.isArray(history.value)
-      ? history.value.slice(0, MAX_ALERTS).map(normalizeAlert)
+      ? history.value
       : [];
   if (!fromPrimary.length && !fromHistory.length) {
     throw new Error("Both oref sources failed");
@@ -84,31 +103,54 @@ function buildUrl(base, params) {
   return url.toString();
 }
 
+function parseOrefParams(request) {
+  const url = new URL(request.url);
+  const city = url.searchParams.get("city");
+  const lang = url.searchParams.get("lang") ?? "he";
+  const modeRaw = url.searchParams.get("mode");
+  const mode = Number.isFinite(Number(modeRaw)) ? Number(modeRaw) : 1;
+  return { city, lang, mode };
+}
+
 async function fetchLocalizedAlerts(city, lang = "he", mode = 1) {
-  const url = buildUrl("https://alerts-history.oref.org.il//Shared/Ajax/GetAlarmsHistory.aspx", {
+  const url = buildUrl(OREF_ENDPOINTS.history, {
     lang,
     mode,
     city_0: city,
   });
   const alerts = await fetchJson(url, OREF_HEADERS);
-  return Array.isArray(alerts) ? alerts.map(normalizeAlert) : [];
+  return normalizeAlerts(alerts).slice(0, MAX_ALERTS);
 }
 
 // ── Route map ─────────────────────────────────────────────────────────────
 const ROUTES = {
   "/oref": async (request) => {
-    const url = new URL(request.url);
-    const city = url.searchParams.get("city");
+    const { city, lang, mode } = parseOrefParams(request);
 
     if (city) {
       // Fetch only localized alerts if `city` parameter is provided
-      const alerts = await fetchLocalizedAlerts(city);
-      return JSON.stringify(deduplicateAlerts(alerts));
-    } else {
-      // Fetch general alerts (no city filter)
-      const alerts = await fetchMergedAlerts();
-      return JSON.stringify(alerts);
+      const alerts = await fetchLocalizedAlerts(city, lang, mode);
+      return deduplicateAlerts(alerts);
     }
+
+    // Fetch general alerts (no city filter)
+    const alerts = await fetchMergedAlerts();
+    return deduplicateAlerts(alerts);
+  },
+  "/oref-primary": async () => {
+    const alerts = await fetchPrimaryAlerts();
+    return deduplicateAlerts(alerts);
+  },
+  "/oref-history": async (request) => {
+    const { city, lang, mode } = parseOrefParams(request);
+
+    if (city) {
+      const alerts = await fetchLocalizedAlerts(city, lang, mode);
+      return deduplicateAlerts(alerts);
+    }
+
+    const alerts = await fetchHistoryAlerts();
+    return deduplicateAlerts(alerts);
   },
   "/emess": () => fetchRaw("https://www.emess.co.il/Online/Feed/0", { "User-Agent": "Mozilla/5.0" }),
 };

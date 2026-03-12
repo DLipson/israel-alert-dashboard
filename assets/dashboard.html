@@ -864,6 +864,10 @@
                             <input type="checkbox" id="settings-feed-filter-enabled" checked>
                             <label for="settings-feed-filter-enabled">Enable Emess category filter</label>
                         </div>
+                        <div class="setting-checkbox">
+                            <input type="checkbox" id="settings-log-upstream">
+                            <label for="settings-log-upstream">Log proxy upstream requests</label>
+                        </div>
                         <div class="developer-note">Filter category: <span id="dev-feed-category"></span></div>
 
                         <div class="developer-row">
@@ -900,10 +904,10 @@
         // ── Configuration ─────────────────────────────────────────────────────────
         const CONFIG = {
             api: {
-                orefUrl: '/oref',
                 emessUrl: '/emess'
             },
             dev: {
+                localBaseUrl: 'http://localhost:8787',
                 orefEndpoints: {
                     merged_city: { label: 'Worker /oref (merged) — city', url: '/oref', supportsCity: true },
                     merged_all: { label: 'Worker /oref (merged) — all', url: '/oref', supportsCity: false },
@@ -920,32 +924,18 @@
                 frequency: 800,
                 duration: 0.5,
                 gainStart: 0.3,
-                gainEnd: 0.01,
-                defaultVolume: 30
+                gainEnd: 0.01
             },
             ui: {
-                panelTitles: {
-                    alerts: 'OREF — Alert History',
-                    feed: 'Emess — Live Feed',
-                    live: 'LIVE'
-                },
-                empty: {
-                    alerts: 'No alerts',
-                    feed: 'No posts',
-                    loading: 'Loading…'
-                },
-                labels: {
-                    updating: 'Updated '
-                },
                 tickerAlertCount: 20
             },
-                defaults: {
-                    locationFilter: 'בית שמש',
-                    feedCategory: 'אונליין',
-                    feedFilterEnabled: true,
-                    orefEndpoint: 'merged_city',
-                    pollInterval: 10000,
-                    fontSizePercent: 100,
+            defaults: {
+                locationFilter: 'בית שמש',
+                feedCategory: 'אונליין',
+                feedFilterEnabled: true,
+                orefEndpoint: 'merged_city',
+                pollInterval: 10000,
+                fontSizePercent: 100,
                 soundEnabled: true,
                 soundType: 'sine',
                 volume: 30,
@@ -963,11 +953,11 @@
                 useCustomSoundActive: true,
                 useCustomSoundResolved: true,
                 useCustomSoundExpected: true,
-                notificationsEnabled: false
+                notificationsEnabled: false,
+                logUpstreamRequests: false
             },
             timing: {
                 clockUpdateMs: 1000,
-                tickerDurationS: 40
             }
         };
 
@@ -975,7 +965,6 @@
         const FEED_TYPE = CONFIG.categories.feed;
 
         let mostRecentAlertId = null;
-        let mostRecentAlertCategory = null;
         let mostRecentAlertDate = null;
         let mostRecentFeedId = null;
         let audioContext = null;
@@ -1140,13 +1129,19 @@
             return CONFIG.dev.orefEndpoints[settings.orefEndpoint] ?? CONFIG.dev.orefEndpoints.merged_city;
         }
 
+        function getWorkerBase() {
+            return window.location.origin === 'null'
+                ? CONFIG.dev.localBaseUrl
+                : window.location.origin;
+        }
+
+        function buildWorkerUrl(path) {
+            return new URL(path, getWorkerBase()).toString();
+        }
+
         function buildOrefRequestUrl() {
             const endpoint = getOrefEndpointConfig();
-            const base =
-                window.location.origin === 'null'
-                    ? 'http://localhost'
-                    : window.location.origin;
-            const urlObj = new URL(endpoint.url, base);
+            const urlObj = new URL(endpoint.url, getWorkerBase());
             let warning = '';
 
             if (endpoint.supportsCity) {
@@ -1224,6 +1219,11 @@
             document.documentElement.style.setProperty('--font-size-md', (13 * scale) + 'px');
             document.documentElement.style.setProperty('--font-size-lg', (14 * scale) + 'px');
             document.documentElement.style.setProperty('--font-size-xl', (15 * scale) + 'px');
+            document.getElementById('settings-poll-interval').value = String(settings.pollInterval);
+            document.getElementById('settings-location-filter').value = settings.locationFilter ?? '';
+            document.getElementById('settings-font-size').value = settings.fontSizePercent;
+            document.getElementById('font-size-value').textContent = settings.fontSizePercent;
+            document.getElementById('settings-sound-enabled').checked = settings.soundEnabled;
             document.getElementById('settings-volume').value = settings.volume;
             document.getElementById('volume-value').textContent = settings.volume;
             document.getElementById('settings-notifications-enabled').checked = settings.notificationsEnabled;
@@ -1233,6 +1233,8 @@
             document.getElementById('settings-use-custom-expected').checked = settings.useCustomSoundExpected;
             document.getElementById('settings-feed-filter-enabled').checked = settings.feedFilterEnabled;
             document.getElementById('settings-oref-endpoint').value = settings.orefEndpoint;
+            document.getElementById('settings-sound-type').value = settings.soundType;
+            document.getElementById('settings-log-upstream').checked = settings.logUpstreamRequests;
             document.getElementById('dev-feed-category').textContent = settings.feedCategory;
             updateDevOrefPreview();
         }
@@ -1358,6 +1360,11 @@
             saveSettings();
         });
 
+        document.getElementById('settings-log-upstream').addEventListener('change', (e) => {
+            settings.logUpstreamRequests = e.target.checked;
+            saveSettings();
+        });
+
         // File upload handlers
         const handleFileUpload = (inputId, settingsKey, nameElementId) => {
             document.getElementById(inputId).addEventListener('change', (e) => {
@@ -1443,7 +1450,11 @@
         // ── Fetching ──────────────────────────────────────────────────────────────
 
         async function fetchJson(url) {
-            const response = await fetch(url, { cache: 'no-store' });
+            const headers = settings.logUpstreamRequests ? { 'X-Debug-Log': '1' } : undefined;
+            if (settings.logUpstreamRequests) {
+                console.info(`[dashboard] fetch: ${url}`);
+            }
+            const response = await fetch(url, { cache: 'no-store', headers });
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             return response.json();
         }
@@ -1499,8 +1510,6 @@
       <div class="card-meta">${formatDateTime(alertDate)}</div>
     </div>`;
         }
-
-        const BEIT_SHEMESH = 'בית שמש';
 
         let lastAlerts = [];
 
@@ -1626,7 +1635,7 @@
             const { url } = buildOrefRequestUrl();
             const [orefResult, emessResult] = await Promise.all([
                 fetchAndRender(url, renderAlerts, { error: 'oref-error', updated: 'oref-updated' }),
-                fetchAndRender(CONFIG.api.emessUrl, renderFeed, { error: 'emess-error', updated: 'emess-updated' }),
+                fetchAndRender(buildWorkerUrl(CONFIG.api.emessUrl), renderFeed, { error: 'emess-error', updated: 'emess-updated' }),
             ]);
 
             const orefOk = orefResult?.ok;

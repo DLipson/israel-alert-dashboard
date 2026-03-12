@@ -108,7 +108,12 @@ function parseOrefParams(request) {
   const city = url.searchParams.get("city");
   const lang = url.searchParams.get("lang") ?? "he";
   const modeRaw = url.searchParams.get("mode");
-  const mode = Number.isFinite(Number(modeRaw)) ? Number(modeRaw) : 1;
+  const mode =
+    modeRaw === null
+      ? 1
+      : Number.isFinite(Number(modeRaw))
+        ? Number(modeRaw)
+        : 1;
   return { city, lang, mode };
 }
 

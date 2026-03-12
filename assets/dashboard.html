@@ -1142,7 +1142,11 @@
 
         function buildOrefRequestUrl() {
             const endpoint = getOrefEndpointConfig();
-            const urlObj = new URL(endpoint.url, window.location.origin);
+            const base =
+                window.location.origin === 'null'
+                    ? 'http://localhost'
+                    : window.location.origin;
+            const urlObj = new URL(endpoint.url, base);
             let warning = '';
 
             if (endpoint.supportsCity) {

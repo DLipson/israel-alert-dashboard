@@ -15,30 +15,37 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "X-Debug-Log",
   "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Expose-Headers": "X-Upstream-Urls",
   "Content-Type": "application/json",
 };
 
 const DEBUG_HEADER = "X-Debug-Log";
+const UPSTREAM_HEADER = "X-Upstream-Urls";
 
 function shouldLogUpstream(request) {
   return request.headers.get(DEBUG_HEADER) === "1";
 }
 
-function logUpstream(debug, label, url) {
-  if (!debug) return;
+function logUpstream(options, label, url) {
+  if (!options?.debug) return;
   console.log(`[proxy] ${label}: ${url}`);
 }
 
+function trackUpstream(options, label, url) {
+  logUpstream(options, label, url);
+  if (options?.collector) options.collector.push(url);
+}
+
 // ── Fetching ──────────────────────────────────────────────────────────────
-async function fetchRaw(url, headers, debug, label) {
-  logUpstream(debug, label, url);
+async function fetchRaw(url, headers, options, label) {
+  trackUpstream(options, label, url);
   const res = await fetch(url, { headers });
   if (!res.ok) throw new Error(`HTTP ${res.status} from ${url}`);
   return res.text();
 }
 
-async function fetchJson(url, headers, debug, label) {
-  const text = await fetchRaw(url, headers, debug, label);
+async function fetchJson(url, headers, options, label) {
+  const text = await fetchRaw(url, headers, options, label);
   return JSON.parse(text);
 }
 
@@ -91,30 +98,30 @@ function finalizeAlerts(alerts) {
     .slice(0, MAX_ALERTS);
 }
 
-async function fetchPrimaryAlerts(debug) {
+async function fetchPrimaryAlerts(options) {
   const data = await fetchJson(
     OREF_ENDPOINTS.primary,
     OREF_HEADERS,
-    debug,
+    options,
     "OREF primary"
   );
   return normalizeAlerts(data);
 }
 
-async function fetchHistoryAlerts(debug) {
+async function fetchHistoryAlerts(options) {
   const data = await fetchJson(
     OREF_ENDPOINTS.history,
     OREF_HEADERS,
-    debug,
+    options,
     "OREF history"
   );
   return normalizeAlerts(data);
 }
 
-async function fetchMergedAlerts(debug) {
+async function fetchMergedAlerts(options) {
   const [primary, history] = await Promise.allSettled([
-    fetchPrimaryAlerts(debug),
-    fetchHistoryAlerts(debug),
+    fetchPrimaryAlerts(options),
+    fetchHistoryAlerts(options),
   ]);
 
   const fromPrimary =
@@ -154,59 +161,64 @@ function parseOrefParams(request) {
   return { city, lang, mode };
 }
 
-async function fetchLocalizedAlerts(city, lang = "he", mode = 1, debug) {
+async function fetchLocalizedAlerts(city, lang = "he", mode = 1, options) {
   const url = buildUrl(OREF_ENDPOINTS.history, {
     lang,
     mode,
     city_0: city,
   });
-  const alerts = await fetchJson(url, OREF_HEADERS, debug, "OREF history city");
+  const alerts = await fetchJson(url, OREF_HEADERS, options, "OREF history city");
   return normalizeAlerts(alerts);
 }
 
 // ── Route map ─────────────────────────────────────────────────────────────
 const ROUTES = {
   "/oref": async (request, options) => {
-    const debug = options?.debug ?? false;
     const { city, lang, mode } = parseOrefParams(request);
 
     if (city) {
       // Fetch only localized alerts if `city` parameter is provided
-      const alerts = await fetchLocalizedAlerts(city, lang, mode, debug);
+      const alerts = await fetchLocalizedAlerts(city, lang, mode, options);
       return finalizeAlerts(alerts);
     }
 
     // Fetch general alerts (no city filter)
-    const alerts = await fetchMergedAlerts(debug);
+    const alerts = await fetchMergedAlerts(options);
     return alerts;
   },
   "/oref-primary": async (request, options) => {
-    const debug = options?.debug ?? false;
-    const alerts = await fetchPrimaryAlerts(debug);
+    const alerts = await fetchPrimaryAlerts(options);
     return finalizeAlerts(alerts);
   },
   "/oref-history": async (request, options) => {
-    const debug = options?.debug ?? false;
     const { city, lang, mode } = parseOrefParams(request);
 
     if (city) {
-      const alerts = await fetchLocalizedAlerts(city, lang, mode, debug);
+      const alerts = await fetchLocalizedAlerts(city, lang, mode, options);
       return finalizeAlerts(alerts);
     }
 
-    const alerts = await fetchHistoryAlerts(debug);
+    const alerts = await fetchHistoryAlerts(options);
     return finalizeAlerts(alerts);
   },
   "/emess": (request, options) => {
-    const debug = options?.debug ?? false;
     return fetchRaw(
       "https://www.emess.co.il/Online/Feed/0",
       { "User-Agent": "Mozilla/5.0" },
-      debug,
+      options,
       "Emess feed"
     );
   },
 };
+
+function buildResponseHeaders(debug, upstreamUrls) {
+  if (!debug || !upstreamUrls?.length) return CORS_HEADERS;
+  const unique = Array.from(new Set(upstreamUrls));
+  return {
+    ...CORS_HEADERS,
+    [UPSTREAM_HEADER]: JSON.stringify(unique),
+  };
+}
 
 // ── Worker entry point ────────────────────────────────────────────────────
 export default {
@@ -220,10 +232,12 @@ export default {
     const handler = ROUTES[pathname];
     if (handler) {
       try {
-        const body = await handler(request, { debug: shouldLogUpstream(request) });
+        const debug = shouldLogUpstream(request);
+        const upstreamUrls = [];
+        const body = await handler(request, { debug, collector: upstreamUrls });
         return new Response(typeof body === "string" ? body : JSON.stringify(body), {
           status: 200,
-          headers: CORS_HEADERS,
+          headers: buildResponseHeaders(debug, upstreamUrls),
         });
       } catch (err) {
         return new Response(`Upstream error: ${err.message}`, { status: 502 });

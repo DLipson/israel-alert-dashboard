@@ -875,6 +875,7 @@
                             <select id="settings-oref-endpoint" class="setting-select">
                                 <option value="merged_city" selected>Worker /oref (merged) — city</option>
                                 <option value="merged_all">Worker /oref (merged) — all</option>
+                                <option value="merged_all_client">Worker /oref (merged) — all (client filter)</option>
                                 <option value="primary_all">Worker /oref-primary — AlertsHistory.json</option>
                                 <option value="history_city">Worker /oref-history — city</option>
                                 <option value="history_all">Worker /oref-history — all</option>
@@ -900,6 +901,7 @@
         </div>
     </footer>
 
+    <script src="feed-utils.js"></script>
     <script>
         // ── Configuration ─────────────────────────────────────────────────────────
         const CONFIG = {
@@ -911,6 +913,12 @@
                 orefEndpoints: {
                     merged_city: { label: 'Worker /oref (merged) — city', url: '/oref', supportsCity: true },
                     merged_all: { label: 'Worker /oref (merged) — all', url: '/oref', supportsCity: false },
+                    merged_all_client: {
+                        label: 'Worker /oref (merged) — all (client filter)',
+                        url: '/oref',
+                        supportsCity: false,
+                        clientFilter: true
+                    },
                     primary_all: { label: 'Worker /oref-primary — AlertsHistory.json', url: '/oref-primary', supportsCity: false },
                     history_city: { label: 'Worker /oref-history — city', url: '/oref-history', supportsCity: true },
                     history_all: { label: 'Worker /oref-history — all', url: '/oref-history', supportsCity: false }
@@ -1151,6 +1159,8 @@
                 } else {
                     warning = 'Location filter is empty; city param not applied.';
                 }
+            } else if (endpoint.clientFilter) {
+                warning = 'Client-side filtering enabled.';
             }
 
             return { url: urlObj.toString(), label: endpoint.label, warning };
@@ -1531,21 +1541,24 @@
             return `${mostRecent.data}|${mostRecent.alertDate}|${mostRecent.category}`;
         }
 
-        function getMostRecentFeedId(items) {
-            if (!items.length) return null;
-            const mostRecent = items[0];
-            return `${mostRecent.user_name}|${mostRecent.content}|${mostRecent.date}`;
+        function applyClientAlertFilter(alerts) {
+            const endpoint = getOrefEndpointConfig();
+            if (!endpoint.clientFilter) return alerts;
+            const city = settings.locationFilter?.trim();
+            if (!city) return alerts;
+            return alerts.filter((alert) => String(alert?.data ?? '').includes(city));
         }
 
         function renderAlerts(data) {
             lastAlerts = Array.isArray(data) ? data : [];
+            const visibleAlerts = applyClientAlertFilter(lastAlerts);
 
-            const currentAlertId = getMostRecentAlertId(lastAlerts);
+            const currentAlertId = getMostRecentAlertId(visibleAlerts);
             const hasUpdates = currentAlertId !== mostRecentAlertId;
 
             if (currentAlertId && currentAlertId !== mostRecentAlertId && mostRecentAlertId !== null) {
                 // Get the category of the most recent alert
-                const mostRecentAlert = lastAlerts[0];
+                const mostRecentAlert = visibleAlerts[0];
                 // Only play sound if this is genuinely a new alert (newer alertDate) and less than 10 minutes old
                 const newAlertDate = parseAlertDate(mostRecentAlert);
                 const tenMinutesAgo = Date.now() - (10 * 60 * 1000);
@@ -1556,11 +1569,11 @@
 
             if (hasUpdates) {
                 mostRecentAlertId = currentAlertId;
-                if (lastAlerts.length > 0) {
-                    mostRecentAlertDate = parseAlertDate(lastAlerts[0]);
+                if (visibleAlerts.length > 0) {
+                    mostRecentAlertDate = parseAlertDate(visibleAlerts[0]);
                 }
-                renderAlertsUI(lastAlerts);
-                updateTicker(lastAlerts);
+                renderAlertsUI(visibleAlerts);
+                updateTicker(visibleAlerts);
             }
         }
 
@@ -1607,14 +1620,14 @@
 
         function renderFeed(data) {
             lastFeedData = data ?? null;
-            const items = data?.feed ?? [];
+            const items = FeedUtils.sortFeedItemsByDateDesc(data?.feed ?? []);
             const categories = data?.feeds ?? [];
             const categoryById = Object.fromEntries(categories.map(c => [c.id, c.name]));
             const filteredItems = settings.feedFilterEnabled
                 ? items.filter(item => categoryById[item.feed] === settings.feedCategory)
                 : items;
 
-            const currentFeedId = getMostRecentFeedId(filteredItems);
+            const currentFeedId = FeedUtils.getMostRecentFeedId(filteredItems);
             const hasUpdates = currentFeedId !== mostRecentFeedId;
 
             if (hasUpdates) {

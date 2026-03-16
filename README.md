@@ -70,7 +70,7 @@ wrangler dev
 ## Configuration
 
 The dashboard polls two endpoints:
-- OREF alerts: `/oref`
+- OREF alerts: `/oref` (default), with optional `/oref-live`, `/oref-primary`, and `/oref-history` for troubleshooting
 - Emess feed: `/emess`
 
 Both are proxied through the included `proxy.mjs` server to handle CORS.

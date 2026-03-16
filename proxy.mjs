@@ -9,6 +9,7 @@ const OREF_HEADERS = {
 const OREF_ENDPOINTS = {
   primary: "https://www.oref.org.il/warningMessages/alert/History/AlertsHistory.json",
   history: "https://alerts-history.oref.org.il/Shared/Ajax/GetAlarmsHistory.aspx",
+  live: "https://www.oref.org.il/warningMessages/alert/Alerts.json",
 };
 
 const CORS_HEADERS = {
@@ -57,6 +58,68 @@ function normalizeAlert(item) {
     data: item.data,
     category: item.category,
   };
+}
+
+function parseLiveAlertDate(candidate) {
+  if (candidate === null || candidate === undefined) return null;
+  if (typeof candidate === "number" && Number.isFinite(candidate)) {
+    const ms = candidate > 1e12 ? candidate : candidate * 1000;
+    return new Date(ms).toISOString();
+  }
+  if (typeof candidate === "string") {
+    const parsed = Date.parse(candidate);
+    if (!Number.isNaN(parsed)) return new Date(parsed).toISOString();
+  }
+  return null;
+}
+
+function getLiveAlertDate(item) {
+  const candidates = [item?.alertDate, item?.date, item?.time, item?.id];
+  for (const candidate of candidates) {
+    const parsed = parseLiveAlertDate(candidate);
+    if (parsed) return parsed;
+  }
+  return new Date().toISOString();
+}
+
+function formatLiveAlertData(desc, locations) {
+  const locationText = locations.filter(Boolean).join(", ");
+  if (desc && locationText) return `${desc} — ${locationText}`;
+  return desc || locationText;
+}
+
+function normalizeLiveAlert(item, city) {
+  const locations = Array.isArray(item?.data)
+    ? item.data.map((entry) => String(entry))
+    : item?.data
+      ? [String(item.data)]
+      : [];
+  const filteredLocations = city
+    ? locations.filter((entry) => entry.includes(city))
+    : locations;
+
+  if (city && filteredLocations.length === 0) return null;
+
+  const desc = item?.desc ? String(item.desc) : "";
+  const categoryValue = item?.cat;
+  const category = Number.isFinite(Number(categoryValue))
+    ? Number(categoryValue)
+    : categoryValue;
+
+  return {
+    alertDate: getLiveAlertDate(item),
+    title: item?.title ?? desc ?? "Alert",
+    data: formatLiveAlertData(desc, filteredLocations),
+    category,
+  };
+}
+
+function normalizeLiveAlerts(raw, city) {
+  if (!raw) return [];
+  const items = Array.isArray(raw) ? raw : [raw];
+  return items
+    .map((item) => normalizeLiveAlert(item, city))
+    .filter(Boolean);
 }
 
 function deduplicationKey(alert) {
@@ -116,6 +179,16 @@ async function fetchHistoryAlerts(options) {
     "OREF history"
   );
   return normalizeAlerts(data);
+}
+
+async function fetchLiveAlerts(city, options) {
+  const data = await fetchJson(
+    OREF_ENDPOINTS.live,
+    OREF_HEADERS,
+    options,
+    "OREF live"
+  );
+  return normalizeLiveAlerts(data, city);
 }
 
 async function fetchMergedAlerts(options) {
@@ -199,6 +272,11 @@ const ROUTES = {
     }
 
     const alerts = await fetchHistoryAlerts(options);
+    return finalizeAlerts(alerts);
+  },
+  "/oref-live": async (request, options) => {
+    const { city } = parseOrefParams(request);
+    const alerts = await fetchLiveAlerts(city, options);
     return finalizeAlerts(alerts);
   },
   "/emess": (request, options) => {

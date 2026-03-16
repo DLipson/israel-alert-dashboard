@@ -877,8 +877,8 @@
                                 <option value="merged_all">Worker /oref (merged) — all</option>
                                 <option value="merged_all_client">Worker /oref (merged) — all (client filter)</option>
                                 <option value="primary_all">Worker /oref-primary — AlertsHistory.json</option>
-                                <option value="history_city">Worker /oref-history — city</option>
                                 <option value="history_all">Worker /oref-history — all</option>
+                                <option value="live_alerts">Worker /oref-live — Alerts.json</option>
                             </select>
                         </div>
 
@@ -901,6 +901,7 @@
         </div>
     </footer>
 
+    <script src="alert-utils.js"></script>
     <script src="feed-utils.js"></script>
     <script>
         // ── Configuration ─────────────────────────────────────────────────────────
@@ -920,8 +921,8 @@
                         clientFilter: true
                     },
                     primary_all: { label: 'Worker /oref-primary — AlertsHistory.json', url: '/oref-primary', supportsCity: false },
-                    history_city: { label: 'Worker /oref-history — city', url: '/oref-history', supportsCity: true },
-                    history_all: { label: 'Worker /oref-history — all', url: '/oref-history', supportsCity: false }
+                    history_all: { label: 'Worker /oref-history — all', url: '/oref-history', supportsCity: false },
+                    live_alerts: { label: 'Worker /oref-live — Alerts.json', url: '/oref-live', supportsCity: true }
                 }
             },
             categories: {
@@ -1297,6 +1298,7 @@
             saveSettings();
             // Reset mostRecentAlertId to prevent false sound trigger from filter change
             mostRecentAlertId = null;
+            lastAlertsFingerprint = null;
             // Trigger new fetch with updated filter
             poll();
             updateDevOrefPreview();
@@ -1533,6 +1535,7 @@
         }
 
         let lastAlerts = [];
+        let lastAlertsFingerprint = null;
 
         function getMostRecentAlertId(alerts) {
             if (!alerts.length) return null;
@@ -1554,7 +1557,8 @@
             const visibleAlerts = applyClientAlertFilter(lastAlerts);
 
             const currentAlertId = getMostRecentAlertId(visibleAlerts);
-            const hasUpdates = currentAlertId !== mostRecentAlertId;
+            const currentFingerprint = AlertUtils.getAlertsFingerprint(visibleAlerts);
+            const hasUpdates = currentFingerprint !== lastAlertsFingerprint;
 
             if (currentAlertId && currentAlertId !== mostRecentAlertId && mostRecentAlertId !== null) {
                 // Get the category of the most recent alert
@@ -1569,6 +1573,7 @@
 
             if (hasUpdates) {
                 mostRecentAlertId = currentAlertId;
+                lastAlertsFingerprint = currentFingerprint;
                 if (visibleAlerts.length > 0) {
                     mostRecentAlertDate = parseAlertDate(visibleAlerts[0]);
                 }
@@ -1671,6 +1676,7 @@
             clearInterval(pollTimer);
             // Reset mostRecentAlertId to prevent false sound trigger on first poll (filters may have changed since last session)
             mostRecentAlertId = null;
+            lastAlertsFingerprint = null;
             poll();
             pollTimer = setInterval(poll, settings.pollInterval);
         }

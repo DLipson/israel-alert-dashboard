@@ -192,25 +192,26 @@ async function fetchLiveAlerts(city, options) {
 }
 
 async function fetchMergedAlerts(options) {
-  const [primary, history] = await Promise.allSettled([
-    fetchPrimaryAlerts(options),
+  const [history, live] = await Promise.allSettled([
     fetchHistoryAlerts(options),
+    fetchLiveAlerts(null, options),
   ]);
-
-  const fromPrimary =
-    primary.status === "fulfilled" && Array.isArray(primary.value)
-      ? primary.value
-      : [];
 
   const fromHistory =
     history.status === "fulfilled" && Array.isArray(history.value)
       ? history.value
       : [];
-  if (!fromPrimary.length && !fromHistory.length) {
+
+  const fromLive =
+    live.status === "fulfilled" && Array.isArray(live.value)
+      ? live.value
+      : [];
+
+  if (!fromHistory.length && !fromLive.length) {
     throw new Error("Both oref sources failed");
   }
 
-  return finalizeAlerts([...fromPrimary, ...fromHistory]);
+  return finalizeAlerts([...fromHistory, ...fromLive]);
 }
 
 // ── Localized alerts ──────────────────────────────────────────────────────
@@ -247,15 +248,6 @@ async function fetchLocalizedAlerts(city, lang = "he", mode = 1, options) {
 // ── Route map ─────────────────────────────────────────────────────────────
 const ROUTES = {
   "/oref": async (request, options) => {
-    const { city, lang, mode } = parseOrefParams(request);
-
-    if (city) {
-      // Fetch only localized alerts if `city` parameter is provided
-      const alerts = await fetchLocalizedAlerts(city, lang, mode, options);
-      return finalizeAlerts(alerts);
-    }
-
-    // Fetch general alerts (no city filter)
     const alerts = await fetchMergedAlerts(options);
     return alerts;
   },

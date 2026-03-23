@@ -700,7 +700,7 @@
     <main>
         <section>
             <div class="panel-header">
-                <span class="panel-title">OREF — Alert History</span>
+                <span class="panel-title">OREF — Live + History</span>
                 <span class="panel-updated" id="oref-updated"></span>
             </div>
             <div id="oref-error" class="error-banner" hidden></div>
@@ -873,12 +873,7 @@
                         <div class="developer-row">
                             <span class="developer-label">Oref Endpoint</span>
                             <select id="settings-oref-endpoint" class="setting-select">
-                                <option value="merged_city" selected>Worker /oref (merged) — city</option>
-                                <option value="merged_all">Worker /oref (merged) — all</option>
-                                <option value="merged_all_client">Worker /oref (merged) — all (client filter)</option>
-                                <option value="primary_all">Worker /oref-primary — AlertsHistory.json</option>
-                                <option value="history_all">Worker /oref-history — all</option>
-                                <option value="live_alerts">Worker /oref-live — Alerts.json</option>
+                                <option value="live_history" selected>Worker /oref — live + history (client filter)</option>
                             </select>
                         </div>
 
@@ -887,7 +882,7 @@
                             <span class="developer-status" id="dev-oref-status"></span>
                         </div>
                         <div class="developer-note" id="dev-oref-url"></div>
-                        <div class="developer-note">Uses the current Location Filter value for city-enabled endpoints.</div>
+                        <div class="developer-note">Uses the current Location Filter value for client-side filtering.</div>
                     </div>
                 </div>
             </div>
@@ -912,17 +907,12 @@
             dev: {
                 localBaseUrl: 'http://localhost:8787',
                 orefEndpoints: {
-                    merged_city: { label: 'Worker /oref (merged) — city', url: '/oref', supportsCity: true },
-                    merged_all: { label: 'Worker /oref (merged) — all', url: '/oref', supportsCity: false },
-                    merged_all_client: {
-                        label: 'Worker /oref (merged) — all (client filter)',
+                    live_history: {
+                        label: 'Worker /oref — live + history (client filter)',
                         url: '/oref',
                         supportsCity: false,
                         clientFilter: true
-                    },
-                    primary_all: { label: 'Worker /oref-primary — AlertsHistory.json', url: '/oref-primary', supportsCity: false },
-                    history_all: { label: 'Worker /oref-history — all', url: '/oref-history', supportsCity: false },
-                    live_alerts: { label: 'Worker /oref-live — Alerts.json', url: '/oref-live', supportsCity: true }
+                    }
                 }
             },
             categories: {
@@ -942,7 +932,7 @@
                 locationFilter: 'בית שמש',
                 feedCategory: 'אונליין',
                 feedFilterEnabled: true,
-                orefEndpoint: 'merged_city',
+                orefEndpoint: 'live_history',
                 pollInterval: 10000,
                 fontSizePercent: 100,
                 soundEnabled: true,

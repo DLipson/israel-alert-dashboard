@@ -75,6 +75,10 @@ The dashboard polls two endpoints:
 
 Both are proxied through the included `proxy.mjs` server to handle CORS.
 
+## Versioning
+
+The UI shows a small version label in the header. Increment `CONFIG.app.version` in `assets/dashboard.html` every time updates are pushed so deployments are easy to verify.
+
 ## License
 
 MIT

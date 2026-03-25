@@ -391,6 +391,12 @@
             color: var(--accent);
         }
 
+        .version-label {
+            font-size: var(--font-size-xs);
+            color: var(--dim);
+            letter-spacing: 0.1em;
+        }
+
         .modal-backdrop {
             display: none;
             position: fixed;
@@ -700,6 +706,7 @@
         <h1>IL<em>//</em>ALERTS</h1>
         <div class="header-controls">
             <span id="clock"></span>
+            <span class="version-label" id="app-version"></span>
             <button class="settings-btn" id="settings-btn">⚙ Settings</button>
             <div class="live-dot" id="live-dot"></div>
         </div>
@@ -750,6 +757,10 @@
                 <div class="setting-group">
                     <label class="setting-label">Location Filter</label>
                     <input type="text" id="settings-location-filter" class="setting-input" placeholder="e.g., בית שמש">
+                    <label class="setting-checkbox">
+                        <input type="checkbox" id="settings-location-filter-enabled">
+                        <span>Enable location filter</span>
+                    </label>
                     <small style="color: var(--dim); font-size: 9px;">Leave empty to show all alerts</small>
                 </div>
 
@@ -913,6 +924,9 @@
             api: {
                 emessUrl: '/emess'
             },
+            app: {
+                version: '1.2.1'
+            },
             dev: {
                 localBaseUrl: 'http://localhost:8787',
                 orefEndpoints: {
@@ -939,6 +953,7 @@
             },
             defaults: {
                 locationFilter: 'בית שמש',
+                locationFilterEnabled: true,
                 feedCategory: 'אונליין',
                 feedFilterEnabled: true,
                 orefEndpoint: 'live_history',
@@ -1231,6 +1246,7 @@
             document.documentElement.style.setProperty('--font-size-xl', (15 * scale) + 'px');
             document.getElementById('settings-poll-interval').value = String(settings.pollInterval);
             document.getElementById('settings-location-filter').value = settings.locationFilter ?? '';
+            document.getElementById('settings-location-filter-enabled').checked = settings.locationFilterEnabled;
             document.getElementById('settings-font-size').value = settings.fontSizePercent;
             document.getElementById('font-size-value').textContent = settings.fontSizePercent;
             document.getElementById('settings-sound-enabled').checked = settings.soundEnabled;
@@ -1247,6 +1263,7 @@
             document.getElementById('settings-log-upstream').checked = settings.logUpstreamRequests;
             document.getElementById('dev-feed-category').textContent = settings.feedCategory;
             updateDevOrefPreview();
+            document.getElementById('app-version').textContent = `v${CONFIG.app.version}`;
         }
 
         async function runOrefTest() {
@@ -1298,9 +1315,20 @@
             // Reset mostRecentAlertId to prevent false sound trigger from filter change
             mostRecentAlertId = null;
             lastAlertsFingerprint = null;
+            hasRenderedAlerts = false;
             // Trigger new fetch with updated filter
             poll();
             updateDevOrefPreview();
+        });
+
+        document.getElementById('settings-location-filter-enabled').addEventListener('change', (e) => {
+            settings.locationFilterEnabled = e.target.checked;
+            saveSettings();
+            mostRecentAlertId = null;
+            mostRecentAlertDate = null;
+            lastAlertsFingerprint = null;
+            hasRenderedAlerts = false;
+            renderAlerts(lastAlerts);
         });
 
         document.getElementById('settings-font-size').addEventListener('input', (e) => {
@@ -1561,6 +1589,7 @@
 
         let lastAlerts = [];
         let lastAlertsFingerprint = null;
+        let hasRenderedAlerts = false;
 
         function getMostRecentAlertId(alerts) {
             if (!alerts.length) return null;
@@ -1572,6 +1601,7 @@
         function applyClientAlertFilter(alerts) {
             const endpoint = getOrefEndpointConfig();
             if (!endpoint.clientFilter) return alerts;
+            if (!settings.locationFilterEnabled) return alerts;
             const city = settings.locationFilter?.trim();
             if (!city) return alerts;
             return alerts.filter((alert) => String(alert?.data ?? '').includes(city));
@@ -1584,6 +1614,7 @@
             const currentAlertId = getMostRecentAlertId(visibleAlerts);
             const currentFingerprint = AlertUtils.getAlertsFingerprint(visibleAlerts);
             const hasUpdates = currentFingerprint !== lastAlertsFingerprint;
+            const shouldRender = hasUpdates || !hasRenderedAlerts;
 
             if (currentAlertId && currentAlertId !== mostRecentAlertId && mostRecentAlertId !== null) {
                 // Get the category of the most recent alert
@@ -1596,11 +1627,14 @@
                 }
             }
 
-            if (hasUpdates) {
+            if (shouldRender) {
                 mostRecentAlertId = currentAlertId;
                 lastAlertsFingerprint = currentFingerprint;
+                hasRenderedAlerts = true;
                 if (visibleAlerts.length > 0) {
                     mostRecentAlertDate = parseAlertDate(visibleAlerts[0]);
+                } else {
+                    mostRecentAlertDate = null;
                 }
                 renderAlertsUI(visibleAlerts);
                 updateTicker(visibleAlerts);
@@ -1702,6 +1736,7 @@
             // Reset mostRecentAlertId to prevent false sound trigger on first poll (filters may have changed since last session)
             mostRecentAlertId = null;
             lastAlertsFingerprint = null;
+            hasRenderedAlerts = false;
             poll();
             pollTimer = setInterval(poll, settings.pollInterval);
         }

@@ -21,3 +21,9 @@
 - Root Cause: Live alerts without a parseable timestamp were assigned `new Date()` on each fetch, changing the alert fingerprint and most-recent date every poll. Numeric IDs were FILETIME ticks and were being mis-parsed as epoch seconds.
 - Fix: Parse FILETIME tick IDs using BigInt, only parse date-like strings, and fall back to a stable identifier when no timestamp is available.
 - Verification: Added and ran `tests/proxy.test.mjs` plus full test run (`tests/*.test.js`, `tests/*.test.mjs`).
+
+# 2026-03-25 — Location filter toggle fails to reapply + empty state stuck on loading
+- Bug: Toggling the location filter did not reapply the filter, and empty results left the UI stuck on “Loading…”.
+- Root Cause: The UI only re-rendered when the alert fingerprint changed, so empty results never triggered a first render after filter changes.
+- Fix: Added a filter enable toggle, forced a re-render on filter changes, and tracked initial render state to show “No alerts” when data is empty.
+- Verification: Manual toggle and empty-filter check in the UI.

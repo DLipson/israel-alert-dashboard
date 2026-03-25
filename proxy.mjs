@@ -67,8 +67,28 @@ function parseLiveAlertDate(candidate) {
     return new Date(ms).toISOString();
   }
   if (typeof candidate === "string") {
-    const parsed = Date.parse(candidate);
-    if (!Number.isNaN(parsed)) return new Date(parsed).toISOString();
+    const trimmed = candidate.trim();
+    if (/^\d+$/.test(trimmed)) {
+      if (trimmed.length >= 16) {
+        const ticks = BigInt(trimmed);
+        const unixEpochTicks = 116444736000000000n;
+        if (ticks >= unixEpochTicks) {
+          const ms = Number((ticks - unixEpochTicks) / 10000n);
+          return new Date(ms).toISOString();
+        }
+      }
+      const numeric = Number(trimmed);
+      if (Number.isFinite(numeric)) {
+        const ms = numeric > 1e12 ? numeric : numeric * 1000;
+        return new Date(ms).toISOString();
+      }
+    }
+    const looksLikeDate =
+      /\d{4}-\d{1,2}-\d{1,2}/.test(trimmed) || /\d{1,2}:\d{2}/.test(trimmed);
+    if (looksLikeDate) {
+      const parsed = Date.parse(candidate);
+      if (!Number.isNaN(parsed)) return new Date(parsed).toISOString();
+    }
   }
   return null;
 }
@@ -79,7 +99,10 @@ function getLiveAlertDate(item) {
     const parsed = parseLiveAlertDate(candidate);
     if (parsed) return parsed;
   }
-  return new Date().toISOString();
+  for (const candidate of candidates) {
+    if (candidate !== null && candidate !== undefined) return String(candidate);
+  }
+  return "";
 }
 
 function formatLiveAlertData(desc, locations) {
@@ -289,6 +312,11 @@ function buildResponseHeaders(debug, upstreamUrls) {
     [UPSTREAM_HEADER]: JSON.stringify(unique),
   };
 }
+
+export const _test = {
+  parseLiveAlertDate,
+  getLiveAlertDate,
+};
 
 // ── Worker entry point ────────────────────────────────────────────────────
 export default {

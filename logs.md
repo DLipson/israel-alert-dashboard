@@ -15,3 +15,9 @@
 - Root Cause: The UI only compared the most recent alert ID, so changes to older alerts did not trigger a re-render.
 - Fix: Added a stable alert list fingerprint and used it to detect any changes in the visible alerts.
 - Verification: Added and ran `tests/alert-utils.test.js`.
+
+# 2026-03-25 — Repeat live alert re-triggers sound + UI refresh
+- Bug: The UI re-rendered and re-triggered alert sounds for the same live alert on every poll.
+- Root Cause: Live alerts without a parseable timestamp were assigned `new Date()` on each fetch, changing the alert fingerprint and most-recent date every poll. Numeric IDs were FILETIME ticks and were being mis-parsed as epoch seconds.
+- Fix: Parse FILETIME tick IDs using BigInt, only parse date-like strings, and fall back to a stable identifier when no timestamp is available.
+- Verification: Added and ran `tests/proxy.test.mjs` plus full test run (`tests/*.test.js`, `tests/*.test.mjs`).

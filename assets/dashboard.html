@@ -308,6 +308,14 @@
             border-bottom: 1px solid rgba(255, 59, 59, 0.2);
         }
 
+        .warning-banner {
+            padding: 6px 14px;
+            font-size: var(--font-size-xs);
+            color: #f59e0b;
+            background: rgba(245, 158, 11, 0.06);
+            border-bottom: 1px solid rgba(245, 158, 11, 0.2);
+        }
+
         footer {
             display: flex;
             align-items: center;
@@ -704,6 +712,7 @@
                 <span class="panel-updated" id="oref-updated"></span>
             </div>
             <div id="oref-error" class="error-banner" hidden></div>
+            <div id="oref-warning" class="warning-banner" hidden></div>
             <div class="card-list" id="oref-list">
                 <div class="empty-state">Loading…</div>
             </div>
@@ -1451,16 +1460,6 @@
 
         // ── Fetching ──────────────────────────────────────────────────────────────
 
-        async function fetchJson(url) {
-            const headers = settings.logUpstreamRequests ? { 'X-Debug-Log': '1' } : undefined;
-            const response = await fetch(url, { cache: 'no-store', headers });
-            if (settings.logUpstreamRequests) {
-                logUpstreamFromHeader(response.headers.get('X-Upstream-Urls'));
-            }
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            return response.json();
-        }
-
         function logUpstreamFromHeader(headerValue) {
             if (!headerValue) return;
             let urls = [];
@@ -1475,9 +1474,44 @@
         async function fetchAndRender(url, renderFn, ids) {
             const errorEl = document.getElementById(ids.error);
             const updatedEl = document.getElementById(ids.updated);
+            const warningEl = ids.warning ? document.getElementById(ids.warning) : null;
 
             try {
-                const data = await fetchJson(url);
+                const response = await fetch(url, {
+                    cache: 'no-store',
+                    headers: settings.logUpstreamRequests ? { 'X-Debug-Log': '1' } : undefined
+                });
+                if (settings.logUpstreamRequests) {
+                    logUpstreamFromHeader(response.headers.get('X-Upstream-Urls'));
+                }
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const data = await response.json();
+
+                if (warningEl) {
+                    const statusHeader = response.headers.get('X-Source-Status');
+                    if (statusHeader) {
+                        let status = null;
+                        try {
+                            status = JSON.parse(statusHeader);
+                        } catch {
+                            status = null;
+                        }
+                        const failed = status
+                            ? Object.entries(status)
+                                .filter(([, ok]) => !ok)
+                                .map(([name]) => name)
+                            : [];
+                        if (failed.length > 0) {
+                            warningEl.textContent = `Partial data: ${failed.join(', ')}`;
+                            warningEl.hidden = false;
+                        } else {
+                            warningEl.hidden = true;
+                        }
+                    } else {
+                        warningEl.hidden = true;
+                    }
+                }
+
                 errorEl.hidden = true;
                 updatedEl.textContent = `Updated ${currentTime()}`;
                 renderFn(data);
@@ -1485,6 +1519,7 @@
             } catch (err) {
                 errorEl.textContent = err.message;
                 errorEl.hidden = false;
+                if (warningEl) warningEl.hidden = true;
                 return { ok: false, error: err };
             }
         }
@@ -1653,7 +1688,7 @@
         async function poll() {
             const { url } = buildOrefRequestUrl();
             const [orefResult, emessResult] = await Promise.all([
-                fetchAndRender(url, renderAlerts, { error: 'oref-error', updated: 'oref-updated' }),
+                fetchAndRender(url, renderAlerts, { error: 'oref-error', updated: 'oref-updated', warning: 'oref-warning' }),
                 fetchAndRender(buildWorkerUrl(CONFIG.api.emessUrl), renderFeed, { error: 'emess-error', updated: 'emess-updated' }),
             ]);
 

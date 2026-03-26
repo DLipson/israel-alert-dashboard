@@ -354,6 +354,9 @@ export default {
         const debug = shouldLogUpstream(request);
         const upstreamUrls = [];
         const body = await handler(request, { debug, collector: upstreamUrls });
+        if (body instanceof Response) {
+          return body;
+        }
         return new Response(typeof body === "string" ? body : JSON.stringify(body), {
           status: 200,
           headers: buildResponseHeaders(debug, upstreamUrls),

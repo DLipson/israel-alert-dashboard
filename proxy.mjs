@@ -282,6 +282,13 @@ async function fetchLocalizedAlerts(city, lang = "he", mode = 1, options) {
 
 // ── Route map ─────────────────────────────────────────────────────────────
 const ROUTES = {
+  "/": () =>
+    new Response(null, {
+      status: 302,
+      headers: {
+        Location: "/dashboard.html",
+      },
+    }),
   "/oref": async (request, options) => {
     const { limit } = parseOrefParams(request);
     const alerts = await fetchMergedAlerts(options, limit);

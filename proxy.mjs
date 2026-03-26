@@ -165,7 +165,8 @@ function deduplicateAlerts(alerts) {
   return result;
 }
 
-const MAX_ALERTS = 100;
+const DEFAULT_MAX_ALERTS = 100;
+const MAX_ALERTS_CAP = 5000;
 
 function normalizeAlerts(raw) {
   return Array.isArray(raw) ? raw.map(normalizeAlert) : [];
@@ -178,10 +179,18 @@ function alertTimestamp(alert) {
   return Number.isNaN(timestamp) ? 0 : timestamp;
 }
 
-function finalizeAlerts(alerts) {
-  return deduplicateAlerts(alerts)
-    .sort((a, b) => alertTimestamp(b) - alertTimestamp(a))
-    .slice(0, MAX_ALERTS);
+function finalizeAlerts(alerts, limit = DEFAULT_MAX_ALERTS) {
+  const normalizedLimit =
+    Number.isFinite(limit) && limit > 0
+      ? Math.min(limit, MAX_ALERTS_CAP)
+      : limit === 0
+        ? 0
+        : DEFAULT_MAX_ALERTS;
+  const ordered = deduplicateAlerts(alerts).sort(
+    (a, b) => alertTimestamp(b) - alertTimestamp(a)
+  );
+  if (normalizedLimit === 0) return ordered;
+  return ordered.slice(0, normalizedLimit);
 }
 
 async function fetchPrimaryAlerts(options) {
@@ -214,7 +223,7 @@ async function fetchLiveAlerts(city, options) {
   return normalizeLiveAlerts(data, city);
 }
 
-async function fetchMergedAlerts(options) {
+async function fetchMergedAlerts(options, limit) {
   const [history, live] = await Promise.allSettled([
     fetchHistoryAlerts(options),
     fetchLiveAlerts(null, options),
@@ -234,7 +243,7 @@ async function fetchMergedAlerts(options) {
     throw new Error("Both oref sources failed");
   }
 
-  return finalizeAlerts([...fromHistory, ...fromLive]);
+  return finalizeAlerts([...fromHistory, ...fromLive], limit);
 }
 
 // ── Localized alerts ──────────────────────────────────────────────────────
@@ -255,7 +264,10 @@ function parseOrefParams(request) {
       : Number.isFinite(Number(modeRaw))
         ? Number(modeRaw)
         : 1;
-  return { city, lang, mode };
+  const limitRaw = url.searchParams.get("limit");
+  const parsedLimit = Number(limitRaw);
+  const limit = Number.isFinite(parsedLimit) ? parsedLimit : DEFAULT_MAX_ALERTS;
+  return { city, lang, mode, limit };
 }
 
 async function fetchLocalizedAlerts(city, lang = "he", mode = 1, options) {
@@ -271,7 +283,8 @@ async function fetchLocalizedAlerts(city, lang = "he", mode = 1, options) {
 // ── Route map ─────────────────────────────────────────────────────────────
 const ROUTES = {
   "/oref": async (request, options) => {
-    const alerts = await fetchMergedAlerts(options);
+    const { limit } = parseOrefParams(request);
+    const alerts = await fetchMergedAlerts(options, limit);
     return alerts;
   },
   "/oref-primary": async (request, options) => {
@@ -316,6 +329,7 @@ function buildResponseHeaders(debug, upstreamUrls) {
 export const _test = {
   parseLiveAlertDate,
   getLiveAlertDate,
+  finalizeAlerts,
 };
 
 // ── Worker entry point ────────────────────────────────────────────────────

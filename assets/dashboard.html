@@ -925,7 +925,8 @@
                 emessUrl: '/emess'
             },
             app: {
-                version: '1.2.1'
+                version: '1.2.2',
+                alertsLimit: 0
             },
             dev: {
                 localBaseUrl: 'http://localhost:8787',
@@ -1176,6 +1177,10 @@
                 }
             } else if (endpoint.clientFilter) {
                 warning = 'Client-side filtering enabled.';
+                const city = settings.locationFilter?.trim();
+                if (settings.locationFilterEnabled && city) {
+                    urlObj.searchParams.set('limit', String(CONFIG.app.alertsLimit));
+                }
             }
 
             return { url: urlObj.toString(), label: endpoint.label, warning };

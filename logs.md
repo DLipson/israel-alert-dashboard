@@ -27,3 +27,9 @@
 - Root Cause: The UI only re-rendered when the alert fingerprint changed, so empty results never triggered a first render after filter changes.
 - Fix: Added a filter enable toggle, forced a re-render on filter changes, and tracked initial render state to show “No alerts” when data is empty.
 - Verification: Manual toggle and empty-filter check in the UI.
+
+# 2026-03-26 — Location filter misses alerts outside top 100
+- Bug: Filtering by city showed no alerts even though history contained recent matches.
+- Root Cause: The worker truncated merged alerts to 100 items before the client-side filter ran.
+- Fix: Added an optional `limit` query param for `/oref`, and the UI requests `limit=0` (no truncation) when the location filter is enabled.
+- Verification: Added and ran `tests/proxy.test.mjs` plus full test run (`tests/*.test.js`, `tests/*.test.mjs`).

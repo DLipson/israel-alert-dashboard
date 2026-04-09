@@ -33,3 +33,9 @@
 - Root Cause: The worker truncated merged alerts to 100 items before the client-side filter ran.
 - Fix: Added an optional `limit` query param for `/oref`, and the UI requests `limit=0` (no truncation) when the location filter is enabled.
 - Verification: Added and ran `tests/proxy.test.mjs` plus full test run (`tests/*.test.js`, `tests/*.test.mjs`).
+
+# 2026-04-04 — CAT-10 alerts sorting debug
+- Bug: CAT-10 alerts appear at the bottom even when they are most recent.
+- Root Cause: Unknown (needs payload capture).
+- Fix: Log CAT-10 payloads from both history and live normalization paths for debugging.
+- Verification: Manual inspection of worker logs when CAT-10 occurs.

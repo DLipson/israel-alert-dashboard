@@ -52,6 +52,9 @@ async function fetchJson(url, headers, options, label) {
 
 // ── Alert normalization ───────────────────────────────────────────────────
 function normalizeAlert(item) {
+  if (Number(item?.category) === 10) {
+    console.log("[oref] cat-10 alert payload:", JSON.stringify(item));
+  }
   return {
     alertDate: item.alertDate,
     title: item.title ?? item.category_desc,
@@ -128,6 +131,10 @@ function normalizeLiveAlert(item, city) {
   const category = Number.isFinite(Number(categoryValue))
     ? Number(categoryValue)
     : categoryValue;
+
+  if (Number(category) === 10) {
+    console.log("[oref] cat-10 live alert payload:", JSON.stringify(item));
+  }
 
   return {
     alertDate: getLiveAlertDate(item),
